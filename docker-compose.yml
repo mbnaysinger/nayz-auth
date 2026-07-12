@@ -31,6 +31,14 @@ services:
       timeout: 5s
       retries: 5
 
+  mailpit:
+    image: axllent/mailpit
+    container_name: nayz-mailpit
+    ports:
+      - "8025:8025" # Interface Web
+      - "1025:1025" # Servidor SMTP
+    restart: unless-stopped
+
 volumes:
   nayz_postgres_data:
   nayz_redis_data:
