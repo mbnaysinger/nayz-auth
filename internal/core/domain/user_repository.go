@@ -2,9 +2,9 @@ package domain
 
 import "context"
 
-// UserRepository define o contrato (interface) para acesso aos dados do usuário.
-// Padrão Inversão de Dependência: A regra de negócio conhece apenas esta interface, não sabe que é Postgres.
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	FindByEmail(ctx context.Context, email string) (*User, error)
+	// GetUserRoles busca todas as roles que este usuário possui para uma aplicação específica
+	GetUserRoles(ctx context.Context, userID string, appID string) ([]string, error)
 }
