@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,9 +20,8 @@ import (
 
 func main() {
 	// --- SETUP DO LOGGER (SLOG) MODO JSON ---
-	// Essa configuração garante que absolutamente tudo no projeto será impresso como JSON, perfeito para a nuvem!
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // Permite que vejamos até os logs mais escovados
+		Level: slog.LevelDebug,
 	}))
 	slog.SetDefault(logger)
 	// ----------------------------------------
@@ -57,6 +55,7 @@ func main() {
 	redisClient := config.ConnectRedis(redisUrl)
 	defer redisClient.Close()
 
+	// ---- INJEÇÃO DE DEPENDÊNCIAS ----
 	userRepo := repositories.NewPostgresUserRepository(db)
 	appRepo := repositories.NewPostgresApplicationRepository(db)
 	roleRepo := repositories.NewPostgresRoleRepository(db)
@@ -74,44 +73,20 @@ func main() {
 	
 	authMiddleware := middlewares.NewAuthMiddleware(jwtSecret)
 
-	mux := http.NewServeMux()
+	// ---- MAPEAMENTO DE ROTAS ----
+	// Aqui chamamos o nosso novo módulo segregado!
+	mux := handlers.SetupRoutes(userHandler, appHandler, roleHandler, authMiddleware)
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Serviço nayz-auth UP!"))
-	})
-	
-	mux.HandleFunc("POST /api/v1/users/register", userHandler.Register)
-	mux.HandleFunc("POST /api/v1/users/login", userHandler.Login)
-	
-	mux.HandleFunc("POST /api/v1/users/passwordless/start", userHandler.PasswordlessStart)
-	mux.HandleFunc("POST /api/v1/users/passwordless/verify", userHandler.PasswordlessVerify)
-
-	mux.HandleFunc("GET /api/v1/admin/dashboard", authMiddleware.RequireRole("SUPER_ADMIN", func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := r.Context().Value(middlewares.ClaimsContextKey).(*services.CustomClaims)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		jsonStr := fmt.Sprintf(`{"message": "Bem vindo ao painel de controle!", "user_id": "%s", "app_id": "%s"}`, claims.Subject, claims.AppID)
-		w.Write([]byte(jsonStr))
-	}))
-
-	mux.HandleFunc("POST /api/v1/admin/applications", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.Create))
-	mux.HandleFunc("GET /api/v1/admin/applications", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.List))
-	mux.HandleFunc("PUT /api/v1/admin/applications/{id}", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.Update))
-	mux.HandleFunc("DELETE /api/v1/admin/applications/{id}", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.Delete))
-
-	mux.HandleFunc("POST /api/v1/admin/applications/{app_id}/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Create))
-	mux.HandleFunc("GET /api/v1/admin/applications/{app_id}/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.ListByApp))
-	mux.HandleFunc("DELETE /api/v1/admin/roles/{id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Delete))
-	
-	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.AssignUser))
-	mux.HandleFunc("DELETE /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.RemoveUser))
-
+	// ---- MIDDLEWARES GLOBAIS ----
 	loggedRouter := middlewares.LoggerMiddleware(mux)
+	
+	// Embrulha o servidor no CORS para interceptar os OPTIONS antes de chegar no roteamento!
+	corsRouter := middlewares.CorsMiddleware(loggedRouter)
 
+	// ---- INÍCIO DO SERVIDOR ----
 	slog.Info("Servidor escutando chamadas", slog.Int("port", 8080))
 	
-	if err := http.ListenAndServe(":8080", loggedRouter); err != nil {
+	if err := http.ListenAndServe(":8080", corsRouter); err != nil {
 		slog.Error("Falha crítica no servidor Web", "erro", err.Error())
 		os.Exit(1)
 	}
