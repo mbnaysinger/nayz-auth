@@ -41,23 +41,27 @@ func main() {
 
 	runMigrations(db)
 
-	// Injeção de Dependências (Repositories)
+	// INJEÇÃO DE DEPENDÊNCIAS
+	
+	// Repositories
 	userRepo := repositories.NewPostgresUserRepository(db)
 	appRepo := repositories.NewPostgresApplicationRepository(db)
+	roleRepo := repositories.NewPostgresRoleRepository(db)
 	
 	// Services
 	jwtService := services.NewJWTService(jwtSecret)
 	authService := services.NewAuthService(userRepo, appRepo, jwtService)
 	appService := services.NewApplicationService(appRepo)
+	roleService := services.NewRoleService(roleRepo)
 	
 	// Handlers
 	userHandler := handlers.NewUserHandler(authService)
 	appHandler := handlers.NewApplicationHandler(appService)
+	roleHandler := handlers.NewRoleHandler(roleService)
 	
 	// Middlewares
 	authMiddleware := middlewares.NewAuthMiddleware(jwtSecret)
 
-	// Criação do Router
 	mux := http.NewServeMux()
 
 	// ---- Rotas Públicas ----
@@ -70,20 +74,20 @@ func main() {
 
 	// ---- Rotas Privadas (Admin Console) ----
 	
-	// Teste de dashboard
-	mux.HandleFunc("GET /api/v1/admin/dashboard", authMiddleware.RequireRole("SUPER_ADMIN", func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := r.Context().Value(middlewares.ClaimsContextKey).(*services.CustomClaims)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		jsonStr := fmt.Sprintf(`{"message": "Bem vindo ao painel de controle, Supremo Admin!", "user_id": "%s", "app_id": "%s"}`, claims.Subject, claims.AppID)
-		w.Write([]byte(jsonStr))
-	}))
-
 	// CRUD de Aplicações
 	mux.HandleFunc("POST /api/v1/admin/applications", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.Create))
 	mux.HandleFunc("GET /api/v1/admin/applications", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.List))
 	mux.HandleFunc("PUT /api/v1/admin/applications/{id}", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.Update))
 	mux.HandleFunc("DELETE /api/v1/admin/applications/{id}", authMiddleware.RequireRole("SUPER_ADMIN", appHandler.Delete))
+
+	// CRUD de Roles e Acessos
+	mux.HandleFunc("POST /api/v1/admin/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Create))
+	mux.HandleFunc("GET /api/v1/admin/applications/{app_id}/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.ListByApp))
+	mux.HandleFunc("DELETE /api/v1/admin/roles/{id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Delete))
+	
+	// Atribuição de Acessos (Usuário <-> Role)
+	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.AssignUser))
+	mux.HandleFunc("DELETE /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.RemoveUser))
 
 	fmt.Println("Servidor escutando na porta 8080...")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
