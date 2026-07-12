@@ -29,11 +29,25 @@ func (r *PostgresUserRepository) Create(ctx context.Context, user *domain.User) 
 	return err
 }
 
-func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+func (r *PostgresUserRepository) FindByIdentifier(ctx context.Context, identifier string) (*domain.User, error) {
 	var user domain.User
-	query := `SELECT id, username, email, password_hash, is_active, created_at, updated_at FROM users WHERE email = $1`
+	query := `SELECT id, username, email, password_hash, is_active, created_at, updated_at FROM users WHERE email = $1 OR username = $1`
 
-	err := r.db.GetContext(ctx, &user, query, email)
+	err := r.db.GetContext(ctx, &user, query, identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *PostgresUserRepository) FindByEmailOrUsername(ctx context.Context, email string, username string) (*domain.User, error) {
+	var user domain.User
+	query := `SELECT id, username, email, password_hash, is_active, created_at, updated_at FROM users WHERE email = $1 OR username = $2`
+
+	err := r.db.GetContext(ctx, &user, query, email, username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil

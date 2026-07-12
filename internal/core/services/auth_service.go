@@ -41,8 +41,8 @@ func NewAuthService(
 	}
 }
 
-func (s *AuthService) RegisterUser(ctx context.Context, email, password string) (*domain.User, error) {
-	existingUser, err := s.userRepo.FindByEmail(ctx, email)
+func (s *AuthService) RegisterUser(ctx context.Context, email, username, password string) (*domain.User, error) {
+	existingUser, err := s.userRepo.FindByEmailOrUsername(ctx, email, username)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +58,7 @@ func (s *AuthService) RegisterUser(ctx context.Context, email, password string) 
 
 	user := &domain.User{
 		Email:        email,
+		Username:     username,
 		PasswordHash: &hashStr,
 		IsActive:     true,
 	}
@@ -69,7 +70,7 @@ func (s *AuthService) RegisterUser(ctx context.Context, email, password string) 
 	return user, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, appID, email, password string) (string, error) {
+func (s *AuthService) Login(ctx context.Context, appID, identifier, password string) (string, error) {
 	app, err := s.appRepo.FindByID(ctx, appID)
 	if err != nil {
 		return "", err
@@ -89,7 +90,7 @@ func (s *AuthService) Login(ctx context.Context, appID, email, password string) 
 		return "", errors.New("esta aplicação não aceita login com senha")
 	}
 
-	user, err := s.userRepo.FindByEmail(ctx, email)
+	user, err := s.userRepo.FindByIdentifier(ctx, identifier)
 	if err != nil {
 		return "", err
 	}
@@ -139,7 +140,7 @@ func (s *AuthService) PasswordlessStart(ctx context.Context, appID, email string
 	}
 
 	// 2. Verifica o usuário (Sem revelar detalhes externamente)
-	user, err := s.userRepo.FindByEmail(ctx, email)
+	user, err := s.userRepo.FindByIdentifier(ctx, email)
 	if err != nil {
 		return err
 	}
@@ -186,7 +187,7 @@ func (s *AuthService) PasswordlessVerify(ctx context.Context, appID, email, code
 	s.redisClient.Del(ctx, key)
 
 	// 4. Fluxo normal de geração de JWT (igual ao login)
-	user, err := s.userRepo.FindByEmail(ctx, email)
+	user, err := s.userRepo.FindByIdentifier(ctx, email)
 	if err != nil {
 		return "", err
 	}

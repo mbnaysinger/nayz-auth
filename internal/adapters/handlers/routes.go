@@ -23,17 +23,17 @@ func SetupRoutes(
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status": "UP", "message": "Serviço nayz-auth operando normalmente"}`))
 	})
-	
+
 	// Autenticação Clássica
 	mux.HandleFunc("POST /api/v1/users/register", userHandler.Register)
 	mux.HandleFunc("POST /api/v1/users/login", userHandler.Login)
-	
+
 	// Autenticação Passwordless
 	mux.HandleFunc("POST /api/v1/users/passwordless/start", userHandler.PasswordlessStart)
 	mux.HandleFunc("POST /api/v1/users/passwordless/verify", userHandler.PasswordlessVerify)
 
 	// ---- Rotas Privadas (Admin Console) ----
-	
+
 	// Dashboard genérico
 	mux.HandleFunc("GET /api/v1/admin/dashboard", authMiddleware.RequireRole("SUPER_ADMIN", func(w http.ResponseWriter, r *http.Request) {
 		claims, _ := r.Context().Value(middlewares.ClaimsContextKey).(*services.CustomClaims)
@@ -53,7 +53,7 @@ func SetupRoutes(
 	mux.HandleFunc("POST /api/v1/admin/applications/{app_id}/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Create))
 	mux.HandleFunc("GET /api/v1/admin/applications/{app_id}/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.ListByApp))
 	mux.HandleFunc("DELETE /api/v1/admin/roles/{id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Delete))
-	
+
 	// Atribuição de Acessos
 	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.AssignUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.RemoveUser))

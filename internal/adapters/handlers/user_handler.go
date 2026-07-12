@@ -18,24 +18,25 @@ func NewUserHandler(authService *services.AuthService) *UserHandler {
 // DTOs
 type RegisterUserRequest struct {
 	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
 type LoginRequest struct {
-	AppID    string `json:"app_id"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	AppID      string `json:"app_id"`
+	Identifier string `json:"identifier"`
+	Password   string `json:"password"`
 }
 
 type PwdlessStartRequest struct {
-	AppID string `json:"app_id"`
-	Email string `json:"email"`
+	AppID      string `json:"app_id"`
+	Identifier string `json:"identifier"`
 }
 
 type PwdlessVerifyRequest struct {
-	AppID string `json:"app_id"`
-	Email string `json:"email"`
-	Code  string `json:"code"`
+	AppID      string `json:"app_id"`
+	Identifier string `json:"identifier"`
+	Code       string `json:"code"`
 }
 
 // Rotas Clássicas (Registro e Login com Senha)
@@ -46,7 +47,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error": "Formato de JSON inválido"}`, http.StatusBadRequest)
 		return
 	}
-	user, err := h.authService.RegisterUser(r.Context(), req.Email, req.Password)
+	user, err := h.authService.RegisterUser(r.Context(), req.Email, req.Username, req.Password)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusConflict)
 		return
@@ -62,7 +63,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error": "Formato de JSON inválido"}`, http.StatusBadRequest)
 		return
 	}
-	token, err := h.authService.Login(r.Context(), req.AppID, req.Email, req.Password)
+	token, err := h.authService.Login(r.Context(), req.AppID, req.Identifier, req.Password)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusUnauthorized)
 		return
@@ -78,13 +79,13 @@ func (h *UserHandler) PasswordlessStart(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, `{"error":"json invalido"}`, http.StatusBadRequest)
 		return
 	}
-	
-	err := h.authService.PasswordlessStart(r.Context(), req.AppID, req.Email)
+
+	err := h.authService.PasswordlessStart(r.Context(), req.AppID, req.Identifier)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	// Retornamos sucesso indepentente do e-mail existir no banco (Segurança)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"message": "Se o e-mail estiver cadastrado, um código foi enviado para sua caixa de entrada."}`))
@@ -97,14 +98,14 @@ func (h *UserHandler) PasswordlessVerify(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"json invalido"}`, http.StatusBadRequest)
 		return
 	}
-	
-	token, err := h.authService.PasswordlessVerify(r.Context(), req.AppID, req.Email, req.Code)
+
+	token, err := h.authService.PasswordlessVerify(r.Context(), req.AppID, req.Identifier, req.Code)
 	if err != nil {
 		// Se o código for inválido, retornamos 401
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
 		return
 	}
-	
+
 	json.NewEncoder(w).Encode(map[string]string{
 		"token": token,
 		"type":  "Bearer",

@@ -4,7 +4,7 @@ import "context"
 
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
-	FindByEmail(ctx context.Context, email string) (*User, error)
-	// GetUserRoles busca todas as roles que este usuário possui para uma aplicação específica
+	FindByIdentifier(ctx context.Context, identifier string) (*User, error)
+	FindByEmailOrUsername(ctx context.Context, email string, username string) (*User, error)
 	GetUserRoles(ctx context.Context, userID string, appID string) ([]string, error)
 }
