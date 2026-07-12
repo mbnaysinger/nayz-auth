@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -20,10 +20,18 @@ import (
 )
 
 func main() {
-	fmt.Println("Iniciando serviço nayz-auth...")
+	// --- SETUP DO LOGGER (SLOG) MODO JSON ---
+	// Essa configuração garante que absolutamente tudo no projeto será impresso como JSON, perfeito para a nuvem!
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Permite que vejamos até os logs mais escovados
+	}))
+	slog.SetDefault(logger)
+	// ----------------------------------------
+
+	slog.Info("Iniciando serviço nayz-auth (Identity Provider)")
 
 	if err := godotenv.Load(); err != nil {
-		log.Println("Aviso: Arquivo .env não encontrado. Utilizando variáveis de sistema.")
+		slog.Warn("Arquivo .env não encontrado. Utilizando variáveis de sistema do SO.")
 	}
 
 	dsn := os.Getenv("DATABASE_URL")
@@ -32,22 +40,23 @@ func main() {
 	smtpPort := os.Getenv("SMTP_PORT")
 	jwtSecret := os.Getenv("JWT_SECRET")
 
-	// Fallbacks caso não exista o .env
-	if dsn == "" { log.Fatal("DATABASE_URL não configurada") }
+	if dsn == "" { 
+		slog.Error("Variável DATABASE_URL ausente")
+		os.Exit(1)
+	}
 	if redisUrl == "" { redisUrl = "localhost:6379" }
 	if smtpHost == "" { smtpHost = "localhost" }
 	if smtpPort == "" { smtpPort = "1025" }
 	if jwtSecret == "" { jwtSecret = "meu_segredo_super_forte_para_ambiente_local" }
 
-	// 1. Conexões de Infraestrutura
 	db := config.ConnectDB(dsn)
 	defer db.Close()
+	
 	runMigrations(db)
 
 	redisClient := config.ConnectRedis(redisUrl)
 	defer redisClient.Close()
 
-	// 2. Injeção de Dependências
 	userRepo := repositories.NewPostgresUserRepository(db)
 	appRepo := repositories.NewPostgresApplicationRepository(db)
 	roleRepo := repositories.NewPostgresRoleRepository(db)
@@ -55,7 +64,6 @@ func main() {
 	jwtService := services.NewJWTService(jwtSecret)
 	emailService := services.NewEmailService(smtpHost, smtpPort)
 	
-	// Passamos o Redis e o EmailService para dentro do Motor Principal!
 	authService := services.NewAuthService(userRepo, appRepo, jwtService, redisClient, emailService)
 	appService := services.NewApplicationService(appRepo)
 	roleService := services.NewRoleService(roleRepo)
@@ -68,22 +76,17 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// ---- Rotas Públicas ----
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Serviço nayz-auth UP!"))
 	})
 	
-	// Autenticação Clássica
 	mux.HandleFunc("POST /api/v1/users/register", userHandler.Register)
 	mux.HandleFunc("POST /api/v1/users/login", userHandler.Login)
 	
-	// Autenticação Passwordless
 	mux.HandleFunc("POST /api/v1/users/passwordless/start", userHandler.PasswordlessStart)
 	mux.HandleFunc("POST /api/v1/users/passwordless/verify", userHandler.PasswordlessVerify)
 
-
-	// ---- Rotas Privadas (Admin Console) ----
 	mux.HandleFunc("GET /api/v1/admin/dashboard", authMiddleware.RequireRole("SUPER_ADMIN", func(w http.ResponseWriter, r *http.Request) {
 		claims, _ := r.Context().Value(middlewares.ClaimsContextKey).(*services.CustomClaims)
 		w.Header().Set("Content-Type", "application/json")
@@ -104,18 +107,30 @@ func main() {
 	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.AssignUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.RemoveUser))
 
-	fmt.Println("Servidor escutando na porta 8080...")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		log.Fatalf("Erro ao iniciar servidor: %v", err)
+	loggedRouter := middlewares.LoggerMiddleware(mux)
+
+	slog.Info("Servidor escutando chamadas", slog.Int("port", 8080))
+	
+	if err := http.ListenAndServe(":8080", loggedRouter); err != nil {
+		slog.Error("Falha crítica no servidor Web", "erro", err.Error())
+		os.Exit(1)
 	}
 }
 
 func runMigrations(db *sqlx.DB) {
-	// [Mesmo conteúdo de migração omitido por verbosidade, mantido igual ao anterior]
 	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
-	if err != nil { log.Fatalf("Não instanciou driver migração: %v", err) }
+	if err != nil { 
+		slog.Error("Não instanciou driver migração", "erro", err.Error())
+		os.Exit(1) 
+	}
 	m, err := migrate.NewWithDatabaseInstance("file://db/migrations", "postgres", driver)
-	if err != nil { log.Fatalf("Não inicializou migração: %v", err) }
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange { log.Fatalf("Erro crítico nas migrações: %v", err) }
-	log.Println("Migrações verificadas e atualizadas com sucesso!")
+	if err != nil { 
+		slog.Error("Não inicializou migração", "erro", err.Error())
+		os.Exit(1) 
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange { 
+		slog.Error("Erro crítico nas migrações", "erro", err.Error())
+		os.Exit(1) 
+	}
+	slog.Info("Migrações de banco de dados verificadas e atualizadas com sucesso!")
 }

@@ -2,7 +2,8 @@ package config
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -16,9 +17,10 @@ func ConnectRedis(addr string) *redis.Client {
 
 	// Testa a conexão (Ping)
 	if err := client.Ping(context.Background()).Err(); err != nil {
-		log.Fatalf("Falha crítica ao conectar no Redis: %v", err)
+		slog.Error("Falha crítica ao conectar no Redis", "erro", err.Error())
+		os.Exit(1) // slog não possui Fatal por design (para evitar saídas abruptas mascaradas), então encerramos explicitamente
 	}
 
-	log.Println("Conectado ao Redis com sucesso!")
+	slog.Info("Conectado ao Redis com sucesso", "endereço", addr)
 	return client
 }
