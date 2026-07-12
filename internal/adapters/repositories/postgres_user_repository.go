@@ -19,24 +19,24 @@ func NewPostgresUserRepository(db *sqlx.DB) *PostgresUserRepository {
 
 func (r *PostgresUserRepository) Create(ctx context.Context, user *domain.User) error {
 	query := `
-		INSERT INTO users (email, password_hash, status) 
-		VALUES ($1, $2, $3) 
+		INSERT INTO users (username, email, password_hash, is_active) 
+		VALUES ($1, $2, $3, $4) 
 		RETURNING id, created_at, updated_at`
 
-	err := r.db.QueryRowContext(ctx, query, user.Email, user.PasswordHash, user.Status).
+	err := r.db.QueryRowContext(ctx, query, user.Email, user.PasswordHash, user.IsActive).
 		Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
-	
+
 	return err
 }
 
 func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
-	query := `SELECT id, email, password_hash, status, created_at, updated_at FROM users WHERE email = $1`
-	
+	query := `SELECT id, username, email, password_hash, is_active, created_at, updated_at FROM users WHERE email = $1`
+
 	err := r.db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil 
+			return nil, nil
 		}
 		return nil, err
 	}

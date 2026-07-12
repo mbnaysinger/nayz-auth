@@ -38,18 +38,26 @@ func main() {
 	smtpPort := os.Getenv("SMTP_PORT")
 	jwtSecret := os.Getenv("JWT_SECRET")
 
-	if dsn == "" { 
+	if dsn == "" {
 		slog.Error("Variável DATABASE_URL ausente")
 		os.Exit(1)
 	}
-	if redisUrl == "" { redisUrl = "localhost:6379" }
-	if smtpHost == "" { smtpHost = "localhost" }
-	if smtpPort == "" { smtpPort = "1025" }
-	if jwtSecret == "" { jwtSecret = "meu_segredo_super_forte_para_ambiente_local" }
+	if redisUrl == "" {
+		redisUrl = "localhost:6379"
+	}
+	if smtpHost == "" {
+		smtpHost = "localhost"
+	}
+	if smtpPort == "" {
+		smtpPort = "1025"
+	}
+	if jwtSecret == "" {
+		jwtSecret = "meu_segredo_super_forte_para_ambiente_local"
+	}
 
 	db := config.ConnectDB(dsn)
 	defer db.Close()
-	
+
 	runMigrations(db)
 
 	redisClient := config.ConnectRedis(redisUrl)
@@ -59,18 +67,18 @@ func main() {
 	userRepo := repositories.NewPostgresUserRepository(db)
 	appRepo := repositories.NewPostgresApplicationRepository(db)
 	roleRepo := repositories.NewPostgresRoleRepository(db)
-	
+
 	jwtService := services.NewJWTService(jwtSecret)
 	emailService := services.NewEmailService(smtpHost, smtpPort)
-	
+
 	authService := services.NewAuthService(userRepo, appRepo, jwtService, redisClient, emailService)
 	appService := services.NewApplicationService(appRepo)
 	roleService := services.NewRoleService(roleRepo)
-	
+
 	userHandler := handlers.NewUserHandler(authService)
 	appHandler := handlers.NewApplicationHandler(appService)
 	roleHandler := handlers.NewRoleHandler(roleService)
-	
+
 	authMiddleware := middlewares.NewAuthMiddleware(jwtSecret)
 
 	// ---- MAPEAMENTO DE ROTAS ----
@@ -79,13 +87,13 @@ func main() {
 
 	// ---- MIDDLEWARES GLOBAIS ----
 	loggedRouter := middlewares.LoggerMiddleware(mux)
-	
+
 	// Embrulha o servidor no CORS para interceptar os OPTIONS antes de chegar no roteamento!
 	corsRouter := middlewares.CorsMiddleware(loggedRouter)
 
 	// ---- INÍCIO DO SERVIDOR ----
 	slog.Info("Servidor escutando chamadas", slog.Int("port", 8080))
-	
+
 	if err := http.ListenAndServe(":8080", corsRouter); err != nil {
 		slog.Error("Falha crítica no servidor Web", "erro", err.Error())
 		os.Exit(1)
@@ -94,18 +102,18 @@ func main() {
 
 func runMigrations(db *sqlx.DB) {
 	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
-	if err != nil { 
+	if err != nil {
 		slog.Error("Não instanciou driver migração", "erro", err.Error())
-		os.Exit(1) 
+		os.Exit(1)
 	}
 	m, err := migrate.NewWithDatabaseInstance("file://db/migrations", "postgres", driver)
-	if err != nil { 
+	if err != nil {
 		slog.Error("Não inicializou migração", "erro", err.Error())
-		os.Exit(1) 
+		os.Exit(1)
 	}
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange { 
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		slog.Error("Erro crítico nas migrações", "erro", err.Error())
-		os.Exit(1) 
+		os.Exit(1)
 	}
 	slog.Info("Migrações de banco de dados verificadas e atualizadas com sucesso!")
 }

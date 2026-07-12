@@ -10,13 +10,13 @@ DECLARE
 BEGIN
     -- 1. Cria a Aplicação Root (O próprio Painel Administrativo)
     INSERT INTO applications (name, auth_methods) 
-    VALUES ('Nayz Auth Console', '{"PASSWORD"}')
+    VALUES ('NAYZ-ID', '{"PASSWORD"}')
     RETURNING id INTO v_app_id;
 
     -- 2. Cria o Usuário Root (Senha padrão criptografada: admin123)
     -- O pgcrypto do Postgres possui a função nativa crypt() para gerar hashes bcrypt internamente!
-    INSERT INTO users (email, password_hash) 
-    VALUES ('root@nayz.tech', crypt('admin123', gen_salt('bf', 10)))
+    INSERT INTO users (email, username, password_hash) 
+    VALUES ('teste@teste.com', 'teste', crypt('admin123', gen_salt('bf', 10)))
     RETURNING id INTO v_user_id;
 
     -- 3. Cria a Role Superior para o Painel

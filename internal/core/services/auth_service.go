@@ -43,28 +43,40 @@ func NewAuthService(
 
 func (s *AuthService) RegisterUser(ctx context.Context, email, password string) (*domain.User, error) {
 	existingUser, err := s.userRepo.FindByEmail(ctx, email)
-	if err != nil { return nil, err }
-	if existingUser != nil { return nil, ErrUserAlreadyExists }
+	if err != nil {
+		return nil, err
+	}
+	if existingUser != nil {
+		return nil, ErrUserAlreadyExists
+	}
 
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	hashStr := string(hashedBytes)
 
 	user := &domain.User{
 		Email:        email,
 		PasswordHash: &hashStr,
-		Status:       "ACTIVE",
+		IsActive:     true,
 	}
 
 	err = s.userRepo.Create(ctx, user)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, appID, email, password string) (string, error) {
 	app, err := s.appRepo.FindByID(ctx, appID)
-	if err != nil { return "", err }
-	if app == nil || !app.IsActive { return "", errors.New("aplicação fornecida não existe ou está inativa") }
+	if err != nil {
+		return "", err
+	}
+	if app == nil || !app.IsActive {
+		return "", errors.New("aplicação fornecida não existe ou está inativa")
+	}
 
 	allowsPassword := false
 	for _, method := range app.AuthMethods {
@@ -73,20 +85,32 @@ func (s *AuthService) Login(ctx context.Context, appID, email, password string) 
 			break
 		}
 	}
-	if !allowsPassword { return "", errors.New("esta aplicação não aceita login com senha") }
+	if !allowsPassword {
+		return "", errors.New("esta aplicação não aceita login com senha")
+	}
 
 	user, err := s.userRepo.FindByEmail(ctx, email)
-	if err != nil { return "", err }
-	if user == nil || user.Status != "ACTIVE" { return "", ErrInvalidCredentials }
-	if user.PasswordHash == nil { return "", ErrInvalidCredentials }
+	if err != nil {
+		return "", err
+	}
+	if user == nil || !user.IsActive {
+		return "", ErrInvalidCredentials
+	}
+	if user.PasswordHash == nil {
+		return "", ErrInvalidCredentials
+	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password)); err != nil {
 		return "", ErrInvalidCredentials
 	}
 
 	roles, err := s.userRepo.GetUserRoles(ctx, user.ID, appID)
-	if err != nil { return "", err }
-	if len(roles) == 0 { return "", errors.New("acesso negado: você não tem permissões para esta aplicação") }
+	if err != nil {
+		return "", err
+	}
+	if len(roles) == 0 {
+		return "", errors.New("acesso negado: você não tem permissões para esta aplicação")
+	}
 
 	return s.jwtService.GenerateToken(user, appID, roles)
 }
@@ -96,8 +120,12 @@ func (s *AuthService) Login(ctx context.Context, appID, email, password string) 
 func (s *AuthService) PasswordlessStart(ctx context.Context, appID, email string) error {
 	// 1. Validações da Aplicação
 	app, err := s.appRepo.FindByID(ctx, appID)
-	if err != nil { return err }
-	if app == nil || !app.IsActive { return errors.New("aplicação fornecida não existe ou está inativa") }
+	if err != nil {
+		return err
+	}
+	if app == nil || !app.IsActive {
+		return errors.New("aplicação fornecida não existe ou está inativa")
+	}
 
 	allowsPwdless := false
 	for _, method := range app.AuthMethods {
@@ -112,19 +140,23 @@ func (s *AuthService) PasswordlessStart(ctx context.Context, appID, email string
 
 	// 2. Verifica o usuário (Sem revelar detalhes externamente)
 	user, err := s.userRepo.FindByEmail(ctx, email)
-	if err != nil { return err }
-	if user == nil || user.Status != "ACTIVE" {
+	if err != nil {
+		return err
+	}
+	if user == nil || !user.IsActive {
 		// Se não existe, retornamos sucesso falso para evitar ataques de Enumeração de E-mail
 		return nil
 	}
 
 	// 3. Gera código OTP seguro de 6 dígitos
 	otp := generateOTP(6)
-	
+
 	// 4. Salva no Redis (Com expiração automática de 5 minutos!)
 	key := fmt.Sprintf("otp:%s:%s", appID, email)
 	err = s.redisClient.Set(ctx, key, otp, 5*time.Minute).Err()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	// 5. Envia o e-mail em Background (Goroutine) para responder rápido ao Frontend
 	go func() {
@@ -136,7 +168,7 @@ func (s *AuthService) PasswordlessStart(ctx context.Context, appID, email string
 
 func (s *AuthService) PasswordlessVerify(ctx context.Context, appID, email, code string) (string, error) {
 	key := fmt.Sprintf("otp:%s:%s", appID, email)
-	
+
 	// 1. Busca no Redis
 	savedCode, err := s.redisClient.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -155,11 +187,17 @@ func (s *AuthService) PasswordlessVerify(ctx context.Context, appID, email, code
 
 	// 4. Fluxo normal de geração de JWT (igual ao login)
 	user, err := s.userRepo.FindByEmail(ctx, email)
-	if err != nil { return "", err }
-	if user == nil { return "", ErrInvalidCredentials }
+	if err != nil {
+		return "", err
+	}
+	if user == nil {
+		return "", ErrInvalidCredentials
+	}
 
 	roles, err := s.userRepo.GetUserRoles(ctx, user.ID, appID)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	if len(roles) == 0 {
 		return "", errors.New("acesso negado: você não tem permissões para esta aplicação")
 	}
