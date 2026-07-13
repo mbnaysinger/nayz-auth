@@ -39,6 +39,10 @@ type PwdlessVerifyRequest struct {
 	Code       string `json:"code"`
 }
 
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 // Rotas Clássicas (Registro e Login com Senha)
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -63,12 +67,16 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error": "Formato de JSON inválido"}`, http.StatusBadRequest)
 		return
 	}
-	token, err := h.authService.Login(r.Context(), req.AppID, req.Identifier, req.Password)
+	accessToken, refreshToken, err := h.authService.Login(r.Context(), req.AppID, req.Identifier, req.Password)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusUnauthorized)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"token": token, "type": "Bearer"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"token":         accessToken,
+		"refresh_token": refreshToken,
+		"type":          "Bearer",
+	})
 }
 
 // Rotas do Passwordless (Redis + E-mail)
@@ -99,7 +107,7 @@ func (h *UserHandler) PasswordlessVerify(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	token, err := h.authService.PasswordlessVerify(r.Context(), req.AppID, req.Identifier, req.Code)
+	accessToken, refreshToken, err := h.authService.PasswordlessVerify(r.Context(), req.AppID, req.Identifier, req.Code)
 	if err != nil {
 		// Se o código for inválido, retornamos 401
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
@@ -107,7 +115,29 @@ func (h *UserHandler) PasswordlessVerify(w http.ResponseWriter, r *http.Request)
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
-		"token": token,
-		"type":  "Bearer",
+		"token":         accessToken,
+		"refresh_token": refreshToken,
+		"type":          "Bearer",
+	})
+}
+
+func (h *UserHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var req RefreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Formato JSON inválido"}`, http.StatusBadRequest)
+		return
+	}
+
+	accessToken, newRefreshToken, err := h.authService.Refresh(r.Context(), req.RefreshToken)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"token":         accessToken,
+		"refresh_token": newRefreshToken,
+		"type":          "Bearer",
 	})
 }

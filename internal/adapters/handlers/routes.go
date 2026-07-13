@@ -31,6 +31,9 @@ func SetupRoutes(
 	// Autenticação Passwordless
 	mux.HandleFunc("POST /api/v1/users/passwordless/start", userHandler.PasswordlessStart)
 	mux.HandleFunc("POST /api/v1/users/passwordless/verify", userHandler.PasswordlessVerify)
+	
+	// Rota de Renovação de Sessão (Transparente)
+	mux.HandleFunc("POST /api/v1/users/refresh", userHandler.Refresh)
 
 	// ---- Rotas Privadas (Admin Console) ----
 

@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -31,14 +33,23 @@ func (s *JWTService) GenerateToken(user *domain.User, appID string, roles []stri
 		Roles: roles,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.ID, // O campo 'sub' (subject) é o padrão do mercado para o ID do usuário
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(60 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 
 	// Gera o token com o algoritmo simétrico HS256 (padrão mais usado)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	
+
 	// Assina usando a string ultra secreta do nosso ambiente
 	return token.SignedString(s.secretKey)
+}
+
+// GenerateRefreshToken cria uma string aleatória forte e segura para servir de Refresh Token opaco
+func (s *JWTService) GenerateRefreshToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
