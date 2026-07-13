@@ -13,6 +13,7 @@ func SetupRoutes(
 	userHandler *UserHandler,
 	appHandler *ApplicationHandler,
 	roleHandler *RoleHandler,
+	personHandler *PersonHandler,
 	authMiddleware *middlewares.AuthMiddleware,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
@@ -60,6 +61,12 @@ func SetupRoutes(
 	// Atribuição de Acessos
 	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.AssignUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.RemoveUser))
+
+	// CRUD de Pessoas
+	mux.HandleFunc("POST /api/v1/admin/persons", authMiddleware.RequireRole("SUPER_ADMIN", personHandler.Create))
+	mux.HandleFunc("GET /api/v1/admin/persons", authMiddleware.RequireRole("SUPER_ADMIN", personHandler.List))
+	mux.HandleFunc("GET /api/v1/admin/persons/{id}", authMiddleware.RequireRole("SUPER_ADMIN", personHandler.Get))
+	mux.HandleFunc("PUT /api/v1/admin/persons/{id}", authMiddleware.RequireRole("SUPER_ADMIN", personHandler.Update))
 
 	return mux
 }
