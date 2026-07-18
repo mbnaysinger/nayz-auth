@@ -23,7 +23,7 @@ func (r *PostgresUserRepository) Create(ctx context.Context, user *domain.User) 
 		VALUES ($1, $2, $3, $4) 
 		RETURNING id, created_at, updated_at`
 
-	err := r.db.QueryRowContext(ctx, query, user.Email, user.PasswordHash, user.IsActive).
+	err := r.db.QueryRowContext(ctx, query, user.Username, user.Email, user.PasswordHash, user.IsActive).
 		Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 
 	return err
@@ -69,6 +69,23 @@ func (r *PostgresUserRepository) FindByEmailOrUsername(ctx context.Context, emai
 		return nil, err
 	}
 	return &user, nil
+}
+
+// FindAllWithPerson lista os usuários com os dados básicos da pessoa vinculada (LEFT JOIN: pessoa é opcional)
+func (r *PostgresUserRepository) FindAllWithPerson(ctx context.Context) ([]*domain.UserWithPerson, error) {
+	var users []*domain.UserWithPerson
+	query := `
+		SELECT u.id, u.username, u.email, u.is_active, u.created_at, u.updated_at,
+		       p.id AS person_id, p.name AS person_name
+		FROM users u
+		LEFT JOIN persons p ON p.user_id = u.id
+		ORDER BY u.username ASC`
+
+	err := r.db.SelectContext(ctx, &users, query)
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 // GetUserRoles executa um JOIN clássico para descobrir quais os papéis daquele usuário naquela aplicação

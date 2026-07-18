@@ -3,5 +3,5 @@
 -- ao deletarmos a aplicação e o usuário, o banco apagará automaticamente
 -- as roles, user_applications e user_roles atreladas a eles!
 
-DELETE FROM users WHERE email = 'root@nayz.tech';
-DELETE FROM applications WHERE name = 'Nayz Auth Console';
+DELETE FROM users WHERE email = 'teste@teste.com';
+DELETE FROM applications WHERE name = 'NAYZ-ID';

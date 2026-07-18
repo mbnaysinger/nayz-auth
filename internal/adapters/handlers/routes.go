@@ -36,6 +36,9 @@ func SetupRoutes(
 	// Rota de Renovação de Sessão (Transparente)
 	mux.HandleFunc("POST /api/v1/users/refresh", userHandler.Refresh)
 
+	// Perfil do usuário autenticado (usuário + pessoa vinculada)
+	mux.HandleFunc("GET /api/v1/me", authMiddleware.RequireAuth(userHandler.Me))
+
 	// ---- Rotas Privadas (Admin Console) ----
 
 	// Dashboard genérico
@@ -57,6 +60,9 @@ func SetupRoutes(
 	mux.HandleFunc("POST /api/v1/admin/applications/{app_id}/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Create))
 	mux.HandleFunc("GET /api/v1/admin/applications/{app_id}/roles", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.ListByApp))
 	mux.HandleFunc("DELETE /api/v1/admin/roles/{id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.Delete))
+
+	// Listagem de Usuários (com pessoa vinculada)
+	mux.HandleFunc("GET /api/v1/admin/users", authMiddleware.RequireRole("SUPER_ADMIN", userHandler.List))
 
 	// Atribuição de Acessos
 	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/roles/{role_id}", authMiddleware.RequireRole("SUPER_ADMIN", roleHandler.AssignUser))

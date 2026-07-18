@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/mbnaysinger/nayz-auth/internal/core/domain"
 )
 
@@ -42,6 +43,31 @@ func (r *PostgresPersonRepository) FindByID(ctx context.Context, id string) (*do
 		return nil, err
 	}
 	return &person, nil
+}
+
+func (r *PostgresPersonRepository) FindByUserID(ctx context.Context, userID string) (*domain.Person, error) {
+	var person domain.Person
+	query := `SELECT id, user_id, identifier, name, phone, is_active, birth_date, created_at, updated_at FROM persons WHERE user_id = $1`
+
+	err := r.db.GetContext(ctx, &person, query, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &person, nil
+}
+
+func (r *PostgresPersonRepository) FindByIDs(ctx context.Context, ids []string) ([]*domain.Person, error) {
+	var persons []*domain.Person
+	query := `SELECT id, user_id, identifier, name, phone, is_active, birth_date, created_at, updated_at FROM persons WHERE id = ANY($1)`
+
+	err := r.db.SelectContext(ctx, &persons, query, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	return persons, nil
 }
 
 func (r *PostgresPersonRepository) FindAll(ctx context.Context) ([]*domain.Person, error) {

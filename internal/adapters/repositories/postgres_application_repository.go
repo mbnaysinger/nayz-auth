@@ -22,10 +22,10 @@ func (r *PostgresApplicationRepository) FindByID(ctx context.Context, id string)
 	var app domain.Application
 	var authMethods pq.StringArray // Necessário porque o driver do postgres lê arrays como um tipo específico
 
-	query := `SELECT id, name, auth_methods, is_active FROM applications WHERE id = $1`
+	query := `SELECT id, name, auth_methods, is_active, require_person FROM applications WHERE id = $1`
 
 	row := r.db.QueryRowContext(ctx, query, id)
-	err := row.Scan(&app.ID, &app.Name, &authMethods, &app.IsActive)
+	err := row.Scan(&app.ID, &app.Name, &authMethods, &app.IsActive, &app.RequirePerson)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -39,7 +39,7 @@ func (r *PostgresApplicationRepository) FindByID(ctx context.Context, id string)
 }
 
 func (r *PostgresApplicationRepository) FindAll(ctx context.Context) ([]*domain.Application, error) {
-	query := `SELECT id, name, auth_methods, is_active FROM applications ORDER BY name ASC`
+	query := `SELECT id, name, auth_methods, is_active, require_person FROM applications ORDER BY name ASC`
 	rows, err := r.db.QueryxContext(ctx, query)
 	if err != nil { return nil, err }
 	defer rows.Close()
@@ -48,7 +48,7 @@ func (r *PostgresApplicationRepository) FindAll(ctx context.Context) ([]*domain.
 	for rows.Next() {
 		var app domain.Application
 		var authMethods pq.StringArray
-		if err := rows.Scan(&app.ID, &app.Name, &authMethods, &app.IsActive); err != nil {
+		if err := rows.Scan(&app.ID, &app.Name, &authMethods, &app.IsActive, &app.RequirePerson); err != nil {
 			return nil, err
 		}
 		app.AuthMethods = authMethods

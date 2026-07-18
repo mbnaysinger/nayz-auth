@@ -16,11 +16,14 @@ import (
 var (
 	ErrUserAlreadyExists  = errors.New("já existe um usuário cadastrado com este e-mail")
 	ErrInvalidCredentials = errors.New("credenciais inválidas")
+	ErrPersonRequired     = errors.New("esta aplicação exige uma pessoa vinculada ao usuário; contate o administrador")
+	ErrNoRolesForApp      = errors.New("acesso negado: você não tem permissões para esta aplicação")
 )
 
 type AuthService struct {
 	userRepo     domain.UserRepository
 	appRepo      domain.ApplicationRepository
+	personRepo   domain.PersonRepository
 	jwtService   *JWTService
 	redisClient  *redis.Client
 	emailService *EmailService
@@ -29,6 +32,7 @@ type AuthService struct {
 func NewAuthService(
 	userRepo domain.UserRepository,
 	appRepo domain.ApplicationRepository,
+	personRepo domain.PersonRepository,
 	jwtService *JWTService,
 	redisClient *redis.Client,
 	emailService *EmailService,
@@ -36,10 +40,50 @@ func NewAuthService(
 	return &AuthService{
 		userRepo:     userRepo,
 		appRepo:      appRepo,
+		personRepo:   personRepo,
 		jwtService:   jwtService,
 		redisClient:  redisClient,
 		emailService: emailService,
 	}
+}
+
+// issueTokens concentra a emissão de sessão: valida roles na aplicação, resolve a
+// pessoa vinculada (obrigatória quando a aplicação exige), gera o par de tokens e
+// registra o refresh token no Redis. Usado por Login, PasswordlessVerify e Refresh.
+func (s *AuthService) issueTokens(ctx context.Context, user *domain.User, app *domain.Application) (string, string, error) {
+	roles, err := s.userRepo.GetUserRoles(ctx, user.ID, app.ID)
+	if err != nil {
+		return "", "", err
+	}
+	if len(roles) == 0 {
+		return "", "", ErrNoRolesForApp
+	}
+
+	person, err := s.personRepo.FindByUserID(ctx, user.ID)
+	if err != nil {
+		return "", "", err
+	}
+	if app.RequirePerson && (person == nil || !person.IsActive) {
+		return "", "", ErrPersonRequired
+	}
+
+	accessToken, err := s.jwtService.GenerateToken(user, app.ID, roles, person)
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshToken, err := s.jwtService.GenerateRefreshToken()
+	if err != nil {
+		return "", "", err
+	}
+
+	// Armazena no Redis associando a aplicação e o usuário por 7 dias
+	payload := fmt.Sprintf(`{"user_id":"%s", "app_id":"%s"}`, user.ID, app.ID)
+	if err := s.redisClient.Set(ctx, "refresh_token:"+refreshToken, payload, 7*24*time.Hour).Err(); err != nil {
+		return "", "", err
+	}
+
+	return accessToken, refreshToken, nil
 }
 
 func (s *AuthService) RegisterUser(ctx context.Context, email, username, password string) (*domain.User, error) {
@@ -106,32 +150,29 @@ func (s *AuthService) Login(ctx context.Context, appID, identifier, password str
 		return "", "", ErrInvalidCredentials
 	}
 
-	roles, err := s.userRepo.GetUserRoles(ctx, user.ID, appID)
+	return s.issueTokens(ctx, user, app)
+}
+
+// GetProfile retorna o usuário autenticado e a pessoa vinculada (nil se não houver)
+func (s *AuthService) GetProfile(ctx context.Context, userID string) (*domain.User, *domain.Person, error) {
+	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return "", "", err
+		return nil, nil, err
 	}
-	if len(roles) == 0 {
-		return "", "", errors.New("acesso negado: você não tem permissões para esta aplicação")
+	if user == nil {
+		return nil, nil, errors.New("usuário não encontrado")
 	}
 
-	accessToken, err := s.jwtService.GenerateToken(user, appID, roles)
+	person, err := s.personRepo.FindByUserID(ctx, userID)
 	if err != nil {
-		return "", "", err
+		return nil, nil, err
 	}
+	return user, person, nil
+}
 
-	refreshToken, err := s.jwtService.GenerateRefreshToken()
-	if err != nil {
-		return "", "", err
-	}
-
-	// Armazena no Redis associando a aplicação e o usuário por 7 dias
-	payload := fmt.Sprintf(`{"user_id":"%s", "app_id":"%s"}`, user.ID, appID)
-	err = s.redisClient.Set(ctx, "refresh_token:"+refreshToken, payload, 7*24*time.Hour).Err()
-	if err != nil {
-		return "", "", err
-	}
-
-	return accessToken, refreshToken, nil
+// ListUsers lista todos os usuários com os dados básicos da pessoa vinculada
+func (s *AuthService) ListUsers(ctx context.Context) ([]*domain.UserWithPerson, error) {
+	return s.userRepo.FindAllWithPerson(ctx)
 }
 
 // ---------------- FLUXO PASSWORDLESS ---------------- //
@@ -213,31 +254,15 @@ func (s *AuthService) PasswordlessVerify(ctx context.Context, appID, identifier,
 		return "", "", ErrInvalidCredentials
 	}
 
-	roles, err := s.userRepo.GetUserRoles(ctx, user.ID, appID)
+	app, err := s.appRepo.FindByID(ctx, appID)
 	if err != nil {
 		return "", "", err
 	}
-	if len(roles) == 0 {
-		return "", "", errors.New("acesso negado: você não tem permissões para esta aplicação")
+	if app == nil || !app.IsActive {
+		return "", "", errors.New("aplicação fornecida não existe ou está inativa")
 	}
 
-	accessToken, err := s.jwtService.GenerateToken(user, appID, roles)
-	if err != nil {
-		return "", "", err
-	}
-
-	refreshToken, err := s.jwtService.GenerateRefreshToken()
-	if err != nil {
-		return "", "", err
-	}
-
-	payload := fmt.Sprintf(`{"user_id":"%s", "app_id":"%s"}`, user.ID, appID)
-	err = s.redisClient.Set(ctx, "refresh_token:"+refreshToken, payload, 7*24*time.Hour).Err()
-	if err != nil {
-		return "", "", err
-	}
-
-	return accessToken, refreshToken, nil
+	return s.issueTokens(ctx, user, app)
 }
 
 func generateOTP(length int) string {
@@ -278,27 +303,14 @@ func (s *AuthService) Refresh(ctx context.Context, oldRefreshToken string) (stri
 		return "", "", errors.New("conta inativa ou não encontrada")
 	}
 
-	roles, err := s.userRepo.GetUserRoles(ctx, user.ID, payload.AppID)
+	app, err := s.appRepo.FindByID(ctx, payload.AppID)
 	if err != nil {
 		return "", "", err
 	}
-	if len(roles) == 0 {
-		return "", "", errors.New("permissões foram revogadas")
+	if app == nil || !app.IsActive {
+		return "", "", errors.New("aplicação inativa ou não encontrada")
 	}
 
-	// Emissão de Novos Tokens
-	accessToken, err := s.jwtService.GenerateToken(user, payload.AppID, roles)
-	if err != nil {
-		return "", "", err
-	}
-
-	newRefreshToken, err := s.jwtService.GenerateRefreshToken()
-	if err != nil {
-		return "", "", err
-	}
-
-	newPayloadStr := fmt.Sprintf(`{"user_id":"%s", "app_id":"%s"}`, user.ID, payload.AppID)
-	s.redisClient.Set(ctx, "refresh_token:"+newRefreshToken, newPayloadStr, 7*24*time.Hour)
-
-	return accessToken, newRefreshToken, nil
+	// Emissão de Novos Tokens (revalida roles e pessoa vinculada em tempo real)
+	return s.issueTokens(ctx, user, app)
 }

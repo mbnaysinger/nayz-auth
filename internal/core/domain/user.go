@@ -15,3 +15,10 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
+
+// UserWithPerson é a projeção de listagem: usuário + dados básicos da pessoa vinculada (se houver).
+type UserWithPerson struct {
+	User
+	PersonID   *string `json:"person_id" db:"person_id"`
+	PersonName *string `json:"person_name" db:"person_name"`
+}

@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package person;
+
+option go_package = "github.com/mbnaysinger/nayz-auth/pkg/grpc/pb";
+
+service PersonService {
+  rpc GetPerson(GetPersonRequest) returns (GetPersonResponse) {}
+  // Busca em lote: uma chamada resolve todas as pessoas do board (evita N+1)
+  rpc GetPersonsByIds(GetPersonsByIdsRequest) returns (GetPersonsByIdsResponse) {}
+}
+
+message GetPersonRequest {
+  string person_id = 1;
+}
+
+message GetPersonResponse {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string identifier = 4;
+  bool is_active = 5;
+}
+
+message GetPersonsByIdsRequest {
+  repeated string person_ids = 1;
+}
+
+message Person {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string identifier = 4;
+  bool is_active = 5;
+}
+
+message GetPersonsByIdsResponse {
+  repeated Person persons = 1;
+}

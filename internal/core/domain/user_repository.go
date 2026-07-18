@@ -7,5 +7,6 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id string) (*User, error)
 	FindByIdentifier(ctx context.Context, identifier string) (*User, error)
 	FindByEmailOrUsername(ctx context.Context, email string, username string) (*User, error)
+	FindAllWithPerson(ctx context.Context) ([]*UserWithPerson, error)
 	GetUserRoles(ctx context.Context, userID string, appID string) ([]string, error)
 }

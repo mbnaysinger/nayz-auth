@@ -11,11 +11,16 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 
+	"net"
+
 	"github.com/mbnaysinger/nayz-auth/internal/adapters/handlers"
+	grpchandler "github.com/mbnaysinger/nayz-auth/internal/adapters/handlers/grpc"
 	"github.com/mbnaysinger/nayz-auth/internal/adapters/middlewares"
 	"github.com/mbnaysinger/nayz-auth/internal/adapters/repositories"
 	"github.com/mbnaysinger/nayz-auth/internal/config"
 	"github.com/mbnaysinger/nayz-auth/internal/core/services"
+	pb "github.com/mbnaysinger/nayz-auth/pkg/grpc/pb"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -52,7 +57,8 @@ func main() {
 		smtpPort = "1025"
 	}
 	if jwtSecret == "" {
-		jwtSecret = "meu_segredo_super_forte_para_ambiente_local"
+		slog.Error("Variável JWT_SECRET ausente. Defina um segredo forte no ambiente.")
+		os.Exit(1)
 	}
 
 	db := config.ConnectDB(dsn)
@@ -72,7 +78,7 @@ func main() {
 	jwtService := services.NewJWTService(jwtSecret)
 	emailService := services.NewEmailService(smtpHost, smtpPort)
 
-	authService := services.NewAuthService(userRepo, appRepo, jwtService, redisClient, emailService)
+	authService := services.NewAuthService(userRepo, appRepo, personRepo, jwtService, redisClient, emailService)
 	appService := services.NewApplicationService(appRepo)
 	roleService := services.NewRoleService(roleRepo)
 	personService := services.NewPersonService(personRepo)
@@ -94,10 +100,37 @@ func main() {
 	// Embrulha o servidor no CORS para interceptar os OPTIONS antes de chegar no roteamento!
 	corsRouter := middlewares.CorsMiddleware(loggedRouter)
 
-	// ---- INÍCIO DO SERVIDOR ----
-	slog.Info("Servidor escutando chamadas", slog.Int("port", 8080))
+	// ---- INÍCIO DO SERVIDOR gRPC ----
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50051"
+	}
 
-	if err := http.ListenAndServe(":8080", corsRouter); err != nil {
+	grpcServer := grpc.NewServer()
+	personGrpcHandler := grpchandler.NewPersonGrpcHandler(personService)
+	pb.RegisterPersonServiceServer(grpcServer, personGrpcHandler)
+
+	lis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		slog.Error("Falha ao escutar porta gRPC", "erro", err.Error())
+		os.Exit(1)
+	}
+
+	go func() {
+		slog.Info("Servidor gRPC escutando chamadas", slog.String("port", grpcPort))
+		if err := grpcServer.Serve(lis); err != nil {
+			slog.Error("Falha crítica no servidor gRPC", "erro", err.Error())
+		}
+	}()
+
+	// ---- INÍCIO DO SERVIDOR HTTP ----
+	httpPort := os.Getenv("PORT")
+	if httpPort == "" {
+		httpPort = "8080"
+	}
+	slog.Info("Servidor HTTP escutando chamadas", slog.String("port", httpPort))
+
+	if err := http.ListenAndServe(":"+httpPort, corsRouter); err != nil {
 		slog.Error("Falha crítica no servidor Web", "erro", err.Error())
 		os.Exit(1)
 	}

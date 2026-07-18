@@ -21,13 +21,16 @@ func NewJWTService(secret string) *JWTService {
 // CustomClaims extende os Claims padrão do JWT (como subject e expiração)
 // injetando os nossos dados customizados: a Aplicação logada e as Roles do usuário
 type CustomClaims struct {
-	AppID string   `json:"app_id"`
-	Roles []string `json:"roles"`
+	AppID    string   `json:"app_id"`
+	Roles    []string `json:"roles"`
+	PersonID string   `json:"person_id,omitempty"`
+	Name     string   `json:"name,omitempty"`
 	jwt.RegisteredClaims
 }
 
-// GenerateToken assina o token injetando as permissões mapeadas
-func (s *JWTService) GenerateToken(user *domain.User, appID string, roles []string) (string, error) {
+// GenerateToken assina o token injetando as permissões mapeadas.
+// person é opcional (nil quando o usuário não tem pessoa vinculada).
+func (s *JWTService) GenerateToken(user *domain.User, appID string, roles []string, person *domain.Person) (string, error) {
 	claims := CustomClaims{
 		AppID: appID,
 		Roles: roles,
@@ -36,6 +39,11 @@ func (s *JWTService) GenerateToken(user *domain.User, appID string, roles []stri
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(60 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
+	}
+
+	if person != nil {
+		claims.PersonID = person.ID
+		claims.Name = person.Name
 	}
 
 	// Gera o token com o algoritmo simétrico HS256 (padrão mais usado)

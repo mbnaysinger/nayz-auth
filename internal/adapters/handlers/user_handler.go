@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/mbnaysinger/nayz-auth/internal/adapters/middlewares"
+	"github.com/mbnaysinger/nayz-auth/internal/core/domain"
 	"github.com/mbnaysinger/nayz-auth/internal/core/services"
 )
 
@@ -119,6 +121,43 @@ func (h *UserHandler) PasswordlessVerify(w http.ResponseWriter, r *http.Request)
 		"refresh_token": refreshToken,
 		"type":          "Bearer",
 	})
+}
+
+// Me retorna o perfil do usuário autenticado: dados de usuário + pessoa vinculada
+func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	claims, ok := r.Context().Value(middlewares.ClaimsContextKey).(*services.CustomClaims)
+	if !ok {
+		http.Error(w, `{"error":"Falha ao ler o contexto da requisição"}`, http.StatusInternalServerError)
+		return
+	}
+
+	user, person, err := h.authService.GetProfile(r.Context(), claims.Subject)
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao buscar o perfil do usuário"}`, http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"user":   user,
+		"person": person,
+	})
+}
+
+// List retorna todos os usuários com a pessoa vinculada (visão administrativa)
+func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	users, err := h.authService.ListUsers(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao listar usuários"}`, http.StatusInternalServerError)
+		return
+	}
+	if users == nil {
+		users = make([]*domain.UserWithPerson, 0)
+	}
+	json.NewEncoder(w).Encode(users)
 }
 
 func (h *UserHandler) Refresh(w http.ResponseWriter, r *http.Request) {

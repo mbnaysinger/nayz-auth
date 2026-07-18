@@ -39,6 +39,14 @@ func (s *PersonService) ListPersons(ctx context.Context) ([]*domain.Person, erro
 	return s.repo.FindAll(ctx)
 }
 
+// GetPersonsByIDs resolve várias pessoas em uma única consulta (uso principal: board do Tallo via gRPC)
+func (s *PersonService) GetPersonsByIDs(ctx context.Context, ids []string) ([]*domain.Person, error) {
+	if len(ids) == 0 {
+		return []*domain.Person{}, nil
+	}
+	return s.repo.FindByIDs(ctx, ids)
+}
+
 func (s *PersonService) UpdatePerson(ctx context.Context, id string, updateData *domain.Person) error {
 	person, err := s.GetPerson(ctx, id)
 	if err != nil {
