@@ -19,14 +19,10 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 
 COPY --from=builder /nayz-auth ./nayz-auth
-# Migrations aplicadas automaticamente no start (golang-migrate, file://db/migrations)
 COPY --from=builder /app/db/migrations ./db/migrations
 
 USER app
 
-# Configuração via ambiente:
-# DATABASE_URL (obrigatória) | JWT_SECRET (obrigatória)
-# REDIS_URL (default localhost:6379) | SMTP_HOST/SMTP_PORT | PORT (default 8080) | GRPC_PORT (default 50051)
 EXPOSE 8080 50051
 
 ENTRYPOINT ["./nayz-auth"]
