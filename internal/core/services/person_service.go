@@ -47,6 +47,13 @@ func (s *PersonService) GetPersonsByIDs(ctx context.Context, ids []string) ([]*d
 	return s.repo.FindByIDs(ctx, ids)
 }
 
+func (s *PersonService) DeletePerson(ctx context.Context, id string) error {
+	if _, err := s.GetPerson(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.Delete(ctx, id)
+}
+
 func (s *PersonService) UpdatePerson(ctx context.Context, id string, updateData *domain.Person) error {
 	person, err := s.GetPerson(ctx, id)
 	if err != nil {

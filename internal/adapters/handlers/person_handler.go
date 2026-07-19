@@ -90,6 +90,26 @@ func (h *PersonHandler) Get(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(person)
 }
 
+func (h *PersonHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, `{"error":"ID da pessoa é obrigatório"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.personService.DeletePerson(r.Context(), id); err != nil {
+		if err == services.ErrPersonNotFound {
+			http.Error(w, `{"error":"Pessoa não encontrada"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *PersonHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

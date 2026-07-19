@@ -160,6 +160,39 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
+type SetActiveRequest struct {
+	IsActive bool `json:"is_active"`
+}
+
+// SetActive ativa/desativa um usuário (visão administrativa)
+func (h *UserHandler) SetActive(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req SetActiveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Formato de JSON inválido"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.authService.SetUserActive(r.Context(), r.PathValue("id"), req.IsActive); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]bool{"is_active": req.IsActive})
+}
+
+// ListRoles lista as roles do usuário em todas as aplicações
+func (h *UserHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	roles, err := h.authService.ListUserRoles(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao listar roles do usuário"}`, http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(roles)
+}
+
 func (h *UserHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var req RefreshRequest

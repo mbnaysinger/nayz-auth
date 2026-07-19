@@ -26,7 +26,7 @@ func TestGenerateTokenComPessoaVinculada(t *testing.T) {
 	user := &domain.User{ID: "user-123", Email: "a@b.com", Username: "alexandre"}
 	person := &domain.Person{ID: "person-456", Name: "Alexandre Riff", IsActive: true}
 
-	tokenStr, err := svc.GenerateToken(user, "app-tallo", []string{"ADMIN"}, person)
+	tokenStr, err := svc.GenerateToken(user, "app-tallo", []string{"ADMIN"}, []string{"squads:manage"}, person)
 	if err != nil {
 		t.Fatalf("erro ao gerar token: %v", err)
 	}
@@ -47,13 +47,16 @@ func TestGenerateTokenComPessoaVinculada(t *testing.T) {
 	if claims.Name != "Alexandre Riff" {
 		t.Errorf("name esperado 'Alexandre Riff', veio %s", claims.Name)
 	}
+	if len(claims.Permissions) != 1 || claims.Permissions[0] != "squads:manage" {
+		t.Errorf("permissions esperadas [squads:manage], vieram %v", claims.Permissions)
+	}
 }
 
 func TestGenerateTokenSemPessoaOmiteClaims(t *testing.T) {
 	svc := NewJWTService(testSecret)
 	user := &domain.User{ID: "user-123"}
 
-	tokenStr, err := svc.GenerateToken(user, "app-x", []string{"USER"}, nil)
+	tokenStr, err := svc.GenerateToken(user, "app-x", []string{"USER"}, nil, nil)
 	if err != nil {
 		t.Fatalf("erro ao gerar token: %v", err)
 	}

@@ -9,4 +9,5 @@ type PersonRepository interface {
 	FindByIDs(ctx context.Context, ids []string) ([]*Person, error)
 	FindAll(ctx context.Context) ([]*Person, error)
 	Update(ctx context.Context, person *Person) error
+	Delete(ctx context.Context, id string) error
 }

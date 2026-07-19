@@ -74,6 +74,7 @@ func main() {
 	appRepo := repositories.NewPostgresApplicationRepository(db)
 	roleRepo := repositories.NewPostgresRoleRepository(db)
 	personRepo := repositories.NewPostgresPersonRepository(db)
+	permissionRepo := repositories.NewPostgresPermissionRepository(db)
 
 	jwtService := services.NewJWTService(jwtSecret)
 	emailService := services.NewEmailService(smtpHost, smtpPort)
@@ -82,17 +83,19 @@ func main() {
 	appService := services.NewApplicationService(appRepo)
 	roleService := services.NewRoleService(roleRepo)
 	personService := services.NewPersonService(personRepo)
+	permissionService := services.NewPermissionService(permissionRepo)
 
 	userHandler := handlers.NewUserHandler(authService)
 	appHandler := handlers.NewApplicationHandler(appService)
 	roleHandler := handlers.NewRoleHandler(roleService)
 	personHandler := handlers.NewPersonHandler(personService)
+	permissionHandler := handlers.NewPermissionHandler(permissionService)
 
 	authMiddleware := middlewares.NewAuthMiddleware(jwtSecret)
 
 	// ---- MAPEAMENTO DE ROTAS ----
 	// Aqui chamamos o nosso novo módulo segregado!
-	mux := handlers.SetupRoutes(userHandler, appHandler, roleHandler, personHandler, authMiddleware)
+	mux := handlers.SetupRoutes(userHandler, appHandler, roleHandler, personHandler, permissionHandler, authMiddleware)
 
 	// ---- MIDDLEWARES GLOBAIS ----
 	loggedRouter := middlewares.LoggerMiddleware(mux)

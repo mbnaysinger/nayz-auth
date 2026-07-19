@@ -9,7 +9,7 @@ func CorsMiddleware(next http.Handler) http.Handler {
 
 		// Liberamos as origens, os métodos e os cabeçalhos (como o Authorization que carrega o JWT)
 		w.Header().Set("Access-Control-Allow-Origin", "*") // Em produção, mude "*" para o domínio do Frontend
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
 
 		if r.Method == http.MethodOptions {

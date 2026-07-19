@@ -67,7 +67,12 @@ func (s *AuthService) issueTokens(ctx context.Context, user *domain.User, app *d
 		return "", "", ErrPersonRequired
 	}
 
-	accessToken, err := s.jwtService.GenerateToken(user, app.ID, roles, person)
+	permissions, err := s.userRepo.GetUserPermissions(ctx, user.ID, app.ID)
+	if err != nil {
+		return "", "", err
+	}
+
+	accessToken, err := s.jwtService.GenerateToken(user, app.ID, roles, permissions, person)
 	if err != nil {
 		return "", "", err
 	}
@@ -173,6 +178,23 @@ func (s *AuthService) GetProfile(ctx context.Context, userID string) (*domain.Us
 // ListUsers lista todos os usuários com os dados básicos da pessoa vinculada
 func (s *AuthService) ListUsers(ctx context.Context) ([]*domain.UserWithPerson, error) {
 	return s.userRepo.FindAllWithPerson(ctx)
+}
+
+// SetUserActive ativa/desativa um usuário (desativado não autentica nem renova sessão)
+func (s *AuthService) SetUserActive(ctx context.Context, userID string, isActive bool) error {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("usuário não encontrado")
+	}
+	return s.userRepo.SetActive(ctx, userID, isActive)
+}
+
+// ListUserRoles lista as roles do usuário em todas as aplicações
+func (s *AuthService) ListUserRoles(ctx context.Context, userID string) ([]*domain.Role, error) {
+	return s.userRepo.FindRolesByUser(ctx, userID)
 }
 
 // ---------------- FLUXO PASSWORDLESS ---------------- //

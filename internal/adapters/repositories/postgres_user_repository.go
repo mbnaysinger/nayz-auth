@@ -88,6 +88,38 @@ func (r *PostgresUserRepository) FindAllWithPerson(ctx context.Context) ([]*doma
 	return users, nil
 }
 
+// GetUserPermissions resolve as permissões efetivas do usuário na aplicação (união das roles)
+func (r *PostgresUserRepository) GetUserPermissions(ctx context.Context, userID string, appID string) ([]string, error) {
+	permissions := []string{}
+	query := `
+		SELECT DISTINCT p.name
+		FROM user_roles ur
+		JOIN role_permissions rp ON rp.role_id = ur.role_id
+		JOIN permissions p ON p.id = rp.permission_id
+		WHERE ur.user_id = $1 AND p.application_id = $2
+		ORDER BY p.name`
+	err := r.db.SelectContext(ctx, &permissions, query, userID, appID)
+	return permissions, err
+}
+
+// FindRolesByUser lista as roles do usuário em todas as aplicações
+func (r *PostgresUserRepository) FindRolesByUser(ctx context.Context, userID string) ([]*domain.Role, error) {
+	roles := []*domain.Role{}
+	query := `
+		SELECT r.id, r.application_id, r.name
+		FROM user_roles ur
+		JOIN roles r ON r.id = ur.role_id
+		WHERE ur.user_id = $1
+		ORDER BY r.name`
+	err := r.db.SelectContext(ctx, &roles, query, userID)
+	return roles, err
+}
+
+func (r *PostgresUserRepository) SetActive(ctx context.Context, userID string, isActive bool) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2`, isActive, userID)
+	return err
+}
+
 // GetUserRoles executa um JOIN clássico para descobrir quais os papéis daquele usuário naquela aplicação
 func (r *PostgresUserRepository) GetUserRoles(ctx context.Context, userID string, appID string) ([]string, error) {
 	query := `

@@ -81,6 +81,11 @@ func (r *PostgresPersonRepository) FindAll(ctx context.Context) ([]*domain.Perso
 	return persons, nil
 }
 
+func (r *PostgresPersonRepository) Delete(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM persons WHERE id = $1`, id)
+	return err
+}
+
 func (r *PostgresPersonRepository) Update(ctx context.Context, person *domain.Person) error {
 	query := `
 		UPDATE persons 
