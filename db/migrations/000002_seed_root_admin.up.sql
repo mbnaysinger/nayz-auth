@@ -9,8 +9,8 @@ DECLARE
     v_role_id UUID;
 BEGIN
     -- 1. Cria a Aplicação Root (O próprio Painel Administrativo)
-    INSERT INTO applications (name, auth_methods) 
-    VALUES ('NAYZ-ID', '{"PASSWORD"}')
+    INSERT INTO applications (id, name, auth_methods) 
+    VALUES ('96b45de1-01c8-4c75-9bff-4f7311158e42', 'NAYZ-ID', '{"PASSWORD"}')
     RETURNING id INTO v_app_id;
 
     -- 2. Cria o Usuário Root (Senha padrão criptografada: admin123)

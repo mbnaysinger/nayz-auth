@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -42,6 +43,7 @@ func main() {
 	smtpHost := os.Getenv("SMTP_HOST")
 	smtpPort := os.Getenv("SMTP_PORT")
 	jwtSecret := os.Getenv("JWT_SECRET")
+	corsOrigins := os.Getenv("CORS_ALLOWED_ORIGINS") // lista separada por vírgula; vazio = "*" (dev)
 
 	if dsn == "" {
 		slog.Error("Variável DATABASE_URL ausente")
@@ -101,7 +103,7 @@ func main() {
 	loggedRouter := middlewares.LoggerMiddleware(mux)
 
 	// Embrulha o servidor no CORS para interceptar os OPTIONS antes de chegar no roteamento!
-	corsRouter := middlewares.CorsMiddleware(loggedRouter)
+	corsRouter := middlewares.NewCorsMiddleware(strings.Split(corsOrigins, ","))(loggedRouter)
 
 	// ---- INÍCIO DO SERVIDOR gRPC ----
 	grpcPort := os.Getenv("GRPC_PORT")
